@@ -1,0 +1,309 @@
+> Historical snapshot: this audit described the repository before remediation work recorded in `docs/AI-DLC-LOG.md`. Its inventory and status statements are not a current verification. In particular, the current working tree now includes fixes and documentation listed in that log. Items requiring tests, deployment, or Terraform remain unverified or incomplete until evidence is added.
+
+The repository contains a substantial CampusConnect local application in source form, and almost none of the cloud, documentation, or Git history the specification requires. Nothing was modified, installed, executed, or deployed during this audit.
+
+Overall completion against the full specification is about **40%**. The local application source is much further along, roughly **75–85%** of the required pages and API behavior. Terraform, architecture docs, the AI-DLC log, and commit history are at **0%**. Runtime behavior is **not verified**: Python and Node dependencies are not installed, and tests and builds were not run because they would create files.
+
+## A. Executive summary
+
+**Current state.** Backend and frontend source for local CampusConnect is present and internally consistent: FastAPI routers, SQLite, local auth, listing CRUD, uploads, search, and a React UI with every required page. AWS calls exist as explicit opt-in clients for DynamoDB, S3, Cognito, Bedrock, SageMaker, SQS, and SNS, plus a Lambda image processor. There is no Terraform, no README, and no `docs/` directory. `main` has **no commits**. All 42 project files are staged and uncommitted.
+
+**Biggest risks**
+
+- Treating source as a working system. FastAPI, Pytest, Pillow, Vite, and React are not installed. `.venv` is an empty directory. `frontend/node_modules` does not exist.
+- Cognito sign-in is wired to a function signature that does not match the caller, so the AWS auth path fails before a user record is saved.
+- A later `terraform apply` cannot be reviewed because no infrastructure code exists. Application defaults stay off AWS, which is the right cost posture.
+- One future commit of the current index would record an unfinished tree: no docs, an empty root `package-lock.json`, and the Cognito defect.
+
+**Most important missing pieces.** Terraform for the required network, compute, storage, messaging, auth, monitoring, DNS, and SageMaker resources; deployment and cost documentation; an honest AI-DLC log; dependency installation and test evidence; the Cognito identity bug.
+
+## B. Repository inventory
+
+42 tracked files, 3,645 staged lines. Ignored extras: empty `.venv/`, `.DS_Store`. No `README.md`, `docs/`, or `infrastructure/`.
+
+```
+CloudScale/
+├── .env.example                 # local-mode backend settings template
+├── .gitignore
+├── package-lock.json            # 89-byte stub, empty "packages"
+├── backend/
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   ├── app/                     # FastAPI application
+│   ├── lambda/image_processor/  # SQS image worker
+│   └── tests/                   # API, adapter, and Lambda tests
+└── frontend/
+    ├── package.json
+    ├── vite.config.js
+    ├── index.html
+    ├── .env.example
+    └── src/                     # React UI in six files
+```
+
+| Path | Role |
+|---|---|
+| `backend/app/main.py` | App, CORS, error handler, upload mount, routers |
+| `backend/app/config.py` | Local vs AWS switches |
+| `backend/app/routers/` | Auth, listings, health |
+| `backend/app/sqlite_repo.py`, `dynamodb_repo.py` | Persistence |
+| `backend/app/storage.py`, `images.py` | Local files and S3 |
+| `backend/app/security.py` | PBKDF2 passwords, local JWT, Cognito JWT |
+| `backend/app/ai.py`, `notify.py` | Bedrock, SageMaker, SQS, SNS, local substitutes |
+| `backend/lambda/image_processor/` | Thumbnail worker |
+| `frontend/src/pages.jsx` | All pages (612 lines) |
+| `frontend/src/api.js`, `auth.jsx`, `guards.jsx` | HTTP client, session, route guard |
+
+`.gitignore` covers `.env`, virtualenvs, `node_modules`, `backend/data/`, pytest temp files, Terraform state, and `*.tfvars`, with an exception for a tfvars example that does not exist.
+
+## C. Backend audit
+
+| Feature | Status | Evidence |
+|---|---|---|
+| Structure and separation | IMPLEMENTED | Routers, schemas, repositories, storage, AI, and notifications are separate modules. |
+| FastAPI startup | IMPLEMENTED, NOT VERIFIED | `app` in `main.py`. Lifespan builds repo, storage, notifier, and AI services. Swagger is FastAPI's default `/docs`. |
+| Auth routes | IMPLEMENTED for local mode | `register`, `login`, `me`, `update_me` in `routers/auth.py`. |
+| Listing CRUD | IMPLEMENTED | `create_listing`, `update_listing`, `delete_listing`, `get_listing`, `list_listings` in `routers/listings.py`. |
+| Categories and intents | IMPLEMENTED | `constants.py`: lost-and-found, community, textbooks, housing, events; intents lost, found, offer, request. `GET /api/categories`. |
+| Pydantic validation | IMPLEMENTED | `schemas.py` length, email, category, and intent checks. FastAPI returns 422. |
+| SQLite repository | IMPLEMENTED, NOT VERIFIED | `SqliteRepository.prepare` creates users, listings, uploads, notifications. |
+| DynamoDB repository | PARTIALLY IMPLEMENTED | `DynamoRepository` has the same public methods. No table is defined in this repo. Login reads `password_hash` from the GSI item in `get_user_by_email`, not from the base profile item. |
+| Service layer | IMPLEMENTED | `listings.py` builds and updates records. Repositories do persistence. |
+| Local passwords | IMPLEMENTED | `hash_password` / `verify_password`: PBKDF2-HMAC-SHA256, 200,000 rounds, `hmac.compare_digest`. |
+| Local JWT | IMPLEMENTED | `create_local_token` / `decode_local_token`, HS256, issuer `campusconnect-local`. Default secret `local-dev-only-change-me` is warned by `configuration_warnings`. |
+| Cognito token check | PARTIALLY IMPLEMENTED | `verify_cognito_token` checks RS256, issuer, audience, `sub`, and `email`. |
+| Cognito user provisioning | BROKEN | `current_user` calls `repo.upsert_identity(**identity)` with `id`. Both repositories define `upsert_identity(..., user_id, email, name)`. That call raises `TypeError` before a profile is stored. |
+| Image upload | IMPLEMENTED for local storage | `upload_image`: 5 MB cap, `thumbnail_bytes`, owner recorded in `add_upload`, owner checked by `require_owned_upload`. |
+| S3 storage | IMPLEMENTED as client code, NOT VERIFIED | `S3Storage.save` and presigned `url_for`. Failures become `ProviderError`. |
+| Search and filter | IMPLEMENTED | Query params `q`, `category`, `intent`, `mine`. `filter_listings` matches title, description, location, and owner, then returns 100 rows. SQLite loads every listing first. |
+| Error handling | IMPLEMENTED | `AppError` → JSON `detail`. `ProviderError` is 502. `ConfigurationError` is 503. Validation stays FastAPI's 422. |
+| Config | IMPLEMENTED | Defaults in `config.py` and `.env.example` are local. AWS runs only when a backend is set explicitly. Failed AWS calls are not replaced with local results. |
+| Swagger auth | PARTIALLY IMPLEMENTED | Protected routes read `Authorization` inside `current_user`. That header is not an OpenAPI security scheme, so Swagger UI has no Authorize control for those routes. |
+| Delete cleanup | PARTIALLY IMPLEMENTED | `delete_listing` removes the row only. The file and upload record remain. |
+| Tests present | NOT VERIFIED | See section I. |
+
+Local registration is refused when `auth_mode == "cognito"` (`register` and `login` return 400). That part matches the code comments. The successful Cognito path is the broken one.
+
+`Settings` loads `.env` from the process working directory. `.env.example` says to copy it to `backend/.env`. A server started in the repo root looks for `./.env` instead.
+
+## D. Frontend audit
+
+React 18, Vite 5, and React Router 6 are declared in `frontend/package.json`. There is no frontend test script and no installed `node_modules`. The UI was not built or opened.
+
+| Page / feature | Status | Evidence |
+|---|---|---|
+| Vite config | IMPLEMENTED, NOT VERIFIED | `vite.config.js` proxies `/api` and `/uploads` to `127.0.0.1:8000`. |
+| Entry | IMPLEMENTED | `main.jsx` mounts `App`. |
+| Routing | IMPLEMENTED | `App.jsx`: `/`, `/login`, `/register`, `/browse`, `/listings/:id`, `/listings/:id/edit`, `/create`, `/dashboard`, `/profile`, and a 404 route. |
+| Landing | IMPLEMENTED | `Landing` in `pages.jsx`. |
+| Login | IMPLEMENTED for local mode | `Login` posts to `/api/auth/login`. Cognito uses `cognitoLogin` when health already says `auth_mode === "cognito"`. |
+| Registration | IMPLEMENTED for local mode | `Register`. Cognito mode shows an explanation and a link to sign-in. There is no Cognito `SignUp` call. |
+| Dashboard | IMPLEMENTED | Own listings via `?mine=true`, notifications, mark-read. |
+| Browse | IMPLEMENTED | Search, category, and intent filters, loading and empty states. |
+| Listing detail | IMPLEMENTED | Fetch, owner edit/delete. |
+| Create and edit | IMPLEMENTED | `Editor` posts or patches, uploads a file, and calls both assist endpoints. |
+| Profile | IMPLEMENTED | `PATCH /api/auth/me`. |
+| Auth state | IMPLEMENTED | `auth.jsx` stores `cc_token` and loads `/api/auth/me`. `RequireAuth` redirects when signed out. |
+| Forms | IMPLEMENTED | HTML `required` and `minLength`, plus API error text. |
+| Responsive CSS | IMPLEMENTED, NOT VERIFIED | `styles.css` collapses nav and grids at 800px. |
+| Loading, empty, error | IMPLEMENTED | Browse, detail, dashboard, editor, and login render those states. |
+| Mock listings | NOT PRESENT | Cards render API data. Category placeholders are CSS for missing photos. |
+| Edit photo preview | BROKEN | Edit load copies `image_key` and omits `image_url`, so an existing photo is not shown. `clear_image` exists on `ListingUpdate` and is never sent. |
+| Intent list | PARTIALLY IMPLEMENTED | Browse and the editor hardcode intents. `GET /api/categories` also returns `intents`, and the UI ignores that array. |
+| Cognito login timing | PARTIALLY IMPLEMENTED | Before `/api/health` returns, `health` is null, so submit uses local login. In Cognito mode the API then returns 400. |
+| Production API base | PARTIALLY IMPLEMENTED | Empty `VITE_API_BASE` is correct behind the Vite proxy. A built static site would call `/api` on its own origin. No hosting config exists. |
+
+No missing imports were found in the six frontend source files. Dependencies are only `react`, `react-dom`, and `react-router-dom`.
+
+## E. Frontend–backend integration
+
+These UI actions call real routes defined in the backend:
+
+| UI action | Endpoint |
+|---|---|
+| Mode banner, login mode | `GET /api/health` |
+| Register, login, profile, session restore | `/api/auth/register`, `/login`, `GET` and `PATCH /api/auth/me` |
+| Browse and dashboard | `GET /api/listings`, `GET /api/categories` |
+| Detail, create, edit, delete | `GET` and `POST /api/listings`, `PATCH` and `DELETE /api/listings/{id}` |
+| Photo | `POST /api/uploads`, then `<img src>` of `/uploads/...` or an S3 URL |
+| Description and category buttons | `POST /api/listings/assist/description`, `POST /api/listings/assist/category` |
+| Notifications | `GET /api/notifications`, `POST /api/notifications/{id}/read` |
+| Cognito password grant | `POST https://cognito-idp.{region}.amazonaws.com/` with `InitiateAuth` and `USER_PASSWORD_AUTH`, then `GET /api/auth/me` with the ID token |
+
+Missing or broken connections:
+
+- After Cognito returns a valid ID token, `current_user` → `upsert_identity(id=...)` does not match `user_id`. Profile load fails.
+- The editor cannot show or remove an existing image.
+- Swagger does not document the bearer header the UI sends.
+- No frontend path calls a cloud resource directly except the Cognito `InitiateAuth` request.
+
+`api()` in `api.js` parses JSON only. `DELETE` returns 204 with an empty body and is handled. A non-JSON error body would throw from `JSON.parse` before the status check.
+
+## F. AWS integration audit
+
+No AWS account calls were made. Nothing in the tree proves a live connection. Defaults keep every provider local.
+
+| Integration | What the code actually does | Live AWS |
+|---|---|---|
+| DynamoDB | `DynamoRepository` uses a single table, `pk`/`sk`, and four GSIs named in the module comment. | Not connected. No table definition. |
+| S3 | `S3Storage` uploads and presigns when `STORAGE_BACKEND=s3`. | Not connected. |
+| Local files | `LocalStorage` writes `{uuid}.jpg` under `UPLOAD_DIR`. | Used in the default config. |
+| Cognito | JWT verification plus browser `InitiateAuth`. User-pool sign-up is not implemented. Token-to-profile mapping is broken. | Not connected. |
+| Bedrock | `BedrockDescriptionService.generate` calls `bedrock-runtime.converse`. | Not connected. Default is `LocalDescriptionService`, which labels itself as a template and states that Bedrock was not called. |
+| SageMaker | `SageMakerCategoryService.predict` calls `invoke_endpoint` and requires JSON `category`, `predicted_label`, or `label`. | Not connected. No training script, model artifact, or endpoint. Default is a keyword scorer in `LocalCategoryService`. |
+| SQS | `AwsNotifier.listing_published` sends `{job: process-image, listing_id, image_key, owner_id}` when a photo exists. | Not connected. |
+| SNS | Same method publishes `listing.published`. The Lambda can publish a second message after processing. | Not connected. |
+| Lambda | `handler` in `backend/lambda/image_processor/handler.py` reads S3, writes `processed/{listing_id}.jpg`, updates DynamoDB, and returns `batchItemFailures`. | Not deployed. No event-source mapping, so the DLQ behavior described in the docstring is not configured. |
+| CloudFront, VPC, EC2, ALB, CloudWatch, Route 53, IAM | Names do not appear as resource definitions. | Absent. |
+
+The API also resizes every upload in-process before storage, including when S3 is selected (`upload_image` always calls `thumbnail_bytes`). In AWS mode the Lambda would resize that JPEG again. Local mode never sends SQS, SNS, or Lambda traffic, and the stored notification says so.
+
+Boto3 sessions use `aws_session` with a region and an optional profile. There are no access keys in the source.
+
+## G. Terraform audit
+
+**No `.tf` files exist.** `terraform validate` and `terraform plan` were not run. Terraform v1.17.2 is installed on the machine, and `terraform init` was not executed.
+
+These required resources are absent: VPC, public and private subnets, two availability zones, Internet Gateway, NAT Gateway, security groups, EC2, Auto Scaling Group, Application Load Balancer, CPU scaling policy, S3 versioning and lifecycle, CloudFront, DynamoDB, Lambda, SQS, dead-letter queue, SNS, Cognito user pool and app client, CloudWatch dashboard and alarms, Route 53, SageMaker model and endpoint, and IAM roles.
+
+Cost flags such as `enable_paid_infrastructure` and `enable_nat_gateway` are also absent, because there is no root module to hold them. The application-level equivalent is the set of `*_backend` and `*_provider` defaults in `.env.example`, all set to local.
+
+`.gitignore` already ignores `.terraform/`, state files, and `*.tfvars`, and it expects `infrastructure/terraform/terraform.tfvars.example`. That directory was never created.
+
+IAM least privilege cannot be assessed. There are no policies.
+
+The DynamoDB code and any future table must agree on this key design, which today exists only in `dynamodb_repo.py`:
+
+- `pk`, `sk`
+- `listings-by-time` on `gsi1pk` / `gsi1sk`
+- `listings-by-category` on `gsi2pk` / `gsi2sk`
+- `listings-by-owner` on `gsi3pk` / `gsi3sk`
+- `users-by-email` on `gsi4pk` / `gsi4sk`
+
+The email GSI must project `password_hash` and `id`, or local-password login against DynamoDB will not work. Lambda's `update_item` uses `LISTING#{id}` / `META`. The queue event source must use `ReportBatchItemFailures`, because `handler` returns `batchItemFailures`.
+
+**Cost risk today:** no infrastructure can be applied. **Cost risk later:** running the API with `DATABASE_BACKEND=dynamodb`, `STORAGE_BACKEND=s3`, `DESCRIPTION_PROVIDER=bedrock`, `CATEGORY_PROVIDER=sagemaker`, or `NOTIFICATION_BACKEND=aws` will make real billable calls. `configuration_warnings` reports that mix. It does not block it.
+
+## H. AI-DLC documentation audit
+
+These files are missing:
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/AI-DLC-LOG.md`
+- `docs/deployment-guide.md`
+- `docs/cost-analysis.md`
+
+| Phase | What is in the repo |
+|---|---|
+| Inception | No requirements record, constraints list, or architecture decision record. Decisions are visible only by reading code: SQLite plus DynamoDB behind one repository interface, local auth versus Cognito, and no silent AWS fallback. |
+| Construction | No implementation plan and no validation evidence. The code and tests are the only construction artifacts. |
+| Operations | No test results, deployment status, or operations notes. Deployment status from this audit is: not deployed, not planned in Terraform, not run locally in a verified way. |
+
+There is no Mermaid diagram and no service-by-service justification. Comments in `.env.example`, `config.py`, `ai.py`, and `notify.py` are accurate about local mode. They are not a substitute for the required documents. No historical AI-DLC activity should be invented; the log has not been started.
+
+## I. Testing audit
+
+**Existing tests, unread by a test runner**
+
+| File | What it covers on inspection |
+|---|---|
+| `backend/tests/conftest.py` | Forces local env, points SQLite and uploads at `backend/tests/.tmp`, provides `TestClient` and `register`. Importing it creates that directory. |
+| `backend/tests/test_api.py` | Health, register, login, profile, duplicate email, CRUD, search, ownership, validation, upload, local description and category assistants, provider errors left as 502, Cognito mode disabling local login, `mine=true`. |
+| `backend/tests/test_adapters.py` | Repository method names, DynamoDB item keys, Bedrock request shape, SageMaker payload parsing, local keyword categories, SQS-before-SNS ordering, settings warnings, JPEG resize. Fakes are test doubles, not the running app. |
+| `backend/tests/test_lambda_handler.py` | Successful thumbnail write, skipped job, and one batch failure, using fake S3, SNS, and DynamoDB objects. |
+
+**Verified from evidence.** None. Pytest, the API, and the Vite build were not executed. System Python 3.15.2 does not have FastAPI, Pydantic, Boto3, PyJWT, Pillow, Pytest, or Uvicorn. Node v22.22.2 is installed, and the frontend packages are not.
+
+**Commands that would verify them later**
+
+```bash
+cd backend && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pytest
+cd ../frontend && npm install && npm run build
+```
+
+Those commands install packages and, for pytest, create `backend/tests/.tmp` and `.pytest_cache`. They were not run.
+
+**Defects visible without execution**
+
+- Cognito `upsert_identity` keyword mismatch in `routers/auth.py`. The tests only check that local login is rejected in Cognito mode. They never pass a Cognito token.
+- Edit form drops `image_url` in `pages.jsx`.
+- `GET /api/health` is not covered for the default JWT warning, because the test fixture sets `JWT_SECRET=test-secret`.
+- No frontend tests exist.
+- No Terraform tests exist.
+
+## J. Git and security audit
+
+| Item | Finding |
+|---|---|
+| Branch | `main`, no commits, `HEAD` does not exist |
+| Status | 42 files staged (`A`), no unstaged changes |
+| History | Empty. A single later commit is still possible. |
+| Secrets in the index | `.env.example` and `frontend/.env.example` contain empty AWS fields and the published local JWT placeholder. No `.env`, keys, or state files are tracked. |
+| Generated artifacts | Empty root `package-lock.json` is staged. It is not the frontend lockfile. `frontend/package-lock.json` does not exist. |
+| Ignore gaps | `backend/data/` is ignored. The default paths are `data/campusconnect.db` and `data/uploads`. Started from the repo root, that `data/` directory is not ignored. |
+| Password storage | Local hashes are PBKDF2. DynamoDB stores `password_hash` on the profile item. |
+| Authz | Listing updates and deletes check `owner_id`. Reads and contact details are public. |
+| Token lifetime | Local JWT default is 720 minutes. Logout only removes `localStorage`. |
+| Credentials | `boto3.Session` uses the environment or a named profile. No embedded keys were found. |
+| AdministratorAccess | Not present, because no IAM exists. |
+
+Do not commit the current index as the finished project. It is a valid snapshot of this incomplete tree only.
+
+## K. Prioritized remaining work
+
+### P0 — Critical blockers
+
+| Item | Why it matters | Files | Action | Effort |
+|---|---|---|---|---|
+| Install backend deps and run pytest | Nothing has been shown to run | `backend/requirements.txt`, `backend/tests/` | Create a venv, install, run pytest, fix failures that appear | 1–2 hours, plus fix time |
+| Install frontend deps and run `npm run build` | UI has never been compiled here | `frontend/package.json` | `npm install` inside `frontend`, then `npm run build` | 30–60 minutes |
+| Fix Cognito profile provisioning | AWS login cannot create or reload a user | `backend/app/routers/auth.py`, `upsert_identity` in both repositories | Pass `user_id=identity["id"]`. Add a test that does not call AWS. | About 30 minutes |
+| Keep AWS off | Avoid charges while finishing local work | `.env.example` | Leave every provider on `local` until you explicitly approve a billable call | Ongoing |
+
+### P1 — Essential application functionality
+
+| Item | Why it matters | Files | Action | Effort |
+|---|---|---|---|---|
+| Show and clear existing photos | Edit looks like the photo was lost | `frontend/src/pages.jsx`, `ListingUpdate.clear_image` | Copy `image_url` into the form and send `clear_image` | About 45 minutes |
+| Declare bearer auth in OpenAPI | Swagger cannot exercise protected routes | `backend/app/routers/auth.py` | Add an `HTTPBearer` scheme without changing local token behavior | About 45 minutes |
+| Ignore runtime data at the repo root | SQLite and uploads can be committed by accident | `.gitignore` | Ignore `data/` as well as `backend/data/` | 10 minutes |
+| Local smoke test | Confirms the paths the UI actually uses | Both apps | Register, create, search, upload, edit, delete, profile, notification read | 45–90 minutes |
+| Use category intents from the API | UI and server can drift | `pages.jsx`, `GET /api/categories` | Render `intents` from the response | About 30 minutes |
+
+### P2 — AWS integration and infrastructure
+
+| Item | Why it matters | Files | Action | Effort |
+|---|---|---|---|---|
+| Terraform root module with cost flags defaulting to false | The specification's architecture is missing, and paid resources must stay off | New `infrastructure/terraform/` | Write VPC, subnets, IGW, optional NAT, S3, DynamoDB, SQS, DLQ, SNS, Lambda, Cognito, IAM, and the gated EC2, ASG, ALB, CloudFront, Route 53, SageMaker, and CloudWatch resources | 6–10 hours |
+| Match the DynamoDB GSIs and Lambda batch-failure setting to the code | Otherwise the repository and worker fail at runtime | `dynamodb_repo.py`, `handler.py` | Project `password_hash` on `users-by-email`. Set `ReportBatchItemFailures`. | Included in the Terraform work |
+| SageMaker model artifact | The client can call an endpoint, and this repo cannot create a model | `ai.py` | Document the JSON contract and keep `enable_sagemaker_endpoint=false` | 1–2 hours of docs plus optional training later |
+| Lambda package | Pillow is not vendored | `backend/lambda/image_processor/` | Document the zip layout. Do not deploy it in this pass. | About 1 hour |
+| `terraform fmt` and `terraform validate` only | Proves the module parses | Terraform files | No `apply` or `destroy` without explicit approval | 30 minutes after the module exists |
+
+### P3 — Documentation and presentation
+
+| Item | Why it matters | Action | Effort |
+|---|---|---|---|
+| README with exact local commands | There is no runbook | Document venv, uvicorn, and Vite from the commands that actually worked | 45 minutes |
+| `docs/architecture.md` with a Mermaid diagram | Required, and it must match code | Describe only resources that exist in code or Terraform | 1 hour |
+| `docs/deployment-guide.md` and `docs/cost-analysis.md` | Required before any apply | State that AWS is not deployed. Price the optional NAT, ALB, EC2, SageMaker, and CloudFront paths as paid. | 1–2 hours |
+| `docs/AI-DLC-LOG.md` | Required, and it must not invent earlier sessions | Record this audit as the first evidence, then construction and test results as they happen | 45 minutes |
+| One Git commit when you ask for it | History is empty and the index is only a partial snapshot | Commit after P0 and P1, or after the full tree, as one commit if that is still the goal | 15 minutes |
+
+## L. Recommended continuation plan
+
+Keep the current modules. Replace them only where a test or the Cognito signature shows a defect.
+
+**Milestone A — prove the local app.** Install backend and frontend dependencies. Run pytest and `npm run build`. Fix only failures. Smoke-test the eight pages against SQLite. Fix the edit-image preview and the Cognito `user_id` argument. Add `data/` to `.gitignore`.
+
+**Milestone B — make the API demonstrable.** Add the OpenAPI bearer scheme. Keep local mode as the labelled default. Do not point any setting at AWS during this milestone.
+
+**Milestone C — Terraform, still disabled.** Add `infrastructure/terraform` with `enable_paid_infrastructure`, `enable_nat_gateway`, `enable_alb`, `enable_ec2`, `enable_sagemaker_endpoint`, `enable_cloudfront`, and `enable_route53` defaulting to `false`. Implement the DynamoDB keys the repository already uses. Run `terraform fmt` and `terraform validate`. Stop before `apply`.
+
+**Milestone D — documents from evidence.** Write the README, architecture diagram, deployment guide, and cost analysis from the code and from the test commands that were actually run. Start `docs/AI-DLC-LOG.md` from this audit forward. Create the single commit only when you ask for it.
+
+**Leave in place:** `sqlite_repo.py`, the listing and auth route behavior for local mode, `LocalStorage`, the labelled local AI and notification providers, `pages.jsx` routing, and the Vite proxy.
+
+**Do not claim as done until a command has been run:** pytest, the Vite build, browser flows, `terraform validate`, or any AWS integration.
