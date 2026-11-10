@@ -170,7 +170,7 @@ def footer(canvas, doc):
     canvas.line(doc.leftMargin, 0.58 * inch, width - doc.rightMargin, 0.58 * inch)
     canvas.setFont("Helvetica", 7.2)
     canvas.setFillColor(MUTED)
-    canvas.drawString(doc.leftMargin, 0.38 * inch, "CS-4075 CloudScale | Deployment evidence as of 12 Nov 2026")
+    canvas.drawString(doc.leftMargin, 0.38 * inch, "CS-4075 CloudScale | CampusConnect Project Report")
     canvas.drawRightString(width - doc.rightMargin, 0.38 * inch, f"Page {doc.page}")
     canvas.restoreState()
 
@@ -181,7 +181,7 @@ story += [
     P("CS-4075 | CLOUD COMPUTING", "Subsection"),
     P("CampusConnect", "CoverTitle"),
     P("Cloud project implementation and deployment report", "Subtitle"),
-    P("Prepared 12 November 2026 | Deployed in AWS us-east-1", "BodySmall"),
+    P("Prepared 10 November 2026 | Deployed in AWS us-east-1", "BodySmall"),
     Spacer(1, 0.05 * inch),
 ]
 callout = Table([[P("LIVE DEMO  <link href='https://d39xic7jvhqh80.cloudfront.net' color='#216E9B'>https://d39xic7jvhqh80.cloudfront.net</link>", "Callout")]], colWidths=[7.05 * inch])
