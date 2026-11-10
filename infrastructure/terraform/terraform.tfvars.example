@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars (ignored by git), edit, and review the plan.
+# This default prevents accidental AWS resource creation.
+enable_paid_infrastructure = false
+enable_nat_gateway         = true
+enable_sagemaker_endpoint  = false
+aws_region                 = "us-east-1"
+budget_limit_usd           = 50
+budget_notification_email  = "student@example.edu"
+notification_email         = "student@example.edu"
+
+# Optional. To use a custom name, provide an existing public hosted zone and an
+# issued ACM certificate in us-east-1 covering app_domain.
+hosted_zone_id             = ""
+app_domain                 = ""
+cloudfront_certificate_arn = ""
+
+# Required only when enabling the SageMaker endpoint. Supply the region's
+# scikit-learn inference container image URI and upload the trained artifact
+# to s3://<output bucket>/models/category/model.tar.gz before the second apply.
+sagemaker_inference_image_uri = ""
+sagemaker_model_artifact_key  = "models/category/model.tar.gz"
