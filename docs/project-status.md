@@ -17,7 +17,7 @@ This matrix distinguishes implementation evidence from live AWS evidence. Requir
 | Route 53 / CloudWatch / budget | Optional hosted-zone alias, dashboard, alarms, 80/100% monthly budget alerts | Dashboard, alarms, and $30 monthly alert deployed. Route 53 custom domain is not configured. The alert is not a spending cap. |
 | SageMaker | Optional Serverless endpoint resource and app integration | Disabled to conserve the reported $100 credits; no trained model artifact or endpoint is included. Category suggestions use the local provider. |
 | Bedrock | Real `Converse` integration and user-facing description assist exist | API reports Bedrock selected with no configuration warnings; a real model invocation was not verified. |
-| GitHub private repo/history/collaborator | Twelve component-wise local commits use the Nov 9-10 window under the user's reported course-staff accommodation | GitHub remote/repository and evaluator collaborator are not set up yet; push is deferred per user. |
+| GitHub private repo/history/collaborator | Component-wise local history uses Nov 10 only under the user's reported course-staff accommodation | Private repository publication and evaluator collaborator invitations are pending. |
 | Architecture/report/demo/cleanup evidence | Architecture, deployment, cost docs, this report, and `docs/video-demo-guide.md` | User reports the video is recorded; the video file is not in this checkout. Live component/billing screenshots and post-grading teardown evidence remain. The stack is live and billable. |
 
 ## Local verification

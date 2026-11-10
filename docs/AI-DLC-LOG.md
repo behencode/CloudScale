@@ -44,7 +44,7 @@ Append dated entries after running dependency installation, backend tests, front
 
 ## 2026-11-12 — Deployment completion and evidence
 
-- The active AWS caller remains `arn:aws:iam::977913794651:user/cloudscale-developer`; no root credentials were requested or shared. The account's IAM administrator controls changes to this user's policies.
+- The deployment used the `cloudscale-developer` IAM identity; no root credentials were requested or shared. The account's IAM administrator controls changes to IAM policies.
 - Completed the AWS deployment with the current authorized identity. The backend is publicly reachable through CloudFront; `GET /api/health` returned HTTP 200 and reported AWS mode, Cognito, DynamoDB, S3, Bedrock descriptions, local categories, AWS notifications, and no warnings.
 - Rebuilt the frontend with Cognito region `us-east-1` and the deployed public app client ID, uploaded it to the existing private S3 origin, and completed CloudFront invalidation `I477NMYV461VHHIHNWIVXLMFPN`.
 - Verified two EC2 instances InService/Healthy and both ALB targets healthy. Cancelled an Auto Scaling refresh that remained at 50% with stale health-data reasons despite both targets becoming healthy. Group remains at desired capacity two.
@@ -56,4 +56,4 @@ Append dated entries after running dependency installation, backend tests, front
 - Generated the three-page report PDF with an architecture diagram, service rationale, deployment checks, cost estimate, rubric coverage, remaining gaps, and cleanup instructions; rendered and visually inspected all three pages.
 - The user reports that the demo video has been recorded; its file has not been provided in the workspace, so it is not included in the repository/report artifacts.
 - The user later stopped one EC2 instance and reported no replacement. The AWS health check was interrupted before returning; no AWS changes were made during source cleanup. Recheck the Auto Scaling group before claiming current capacity is healthy.
-- The user reports that course staff approved a Nov 9-10 commit-date accommodation after illness. Created twelve local component commits with both author and committer timestamps within that window; GitHub push remains deferred at the user's request.
+- The user reports that course staff approved a Nov 10 commit-date accommodation after illness. The local component history is dated Nov 10 only, with both author and committer timestamps before 11:59 p.m. PKT. Private GitHub publication and reviewer invites are pending.
