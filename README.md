@@ -4,6 +4,8 @@
 
 CampusConnect is a campus community board for lost-and-found posts, textbook exchange, housing, events, and student requests. This repository contains the application, AWS infrastructure as code, local demo data, deployment notes, and the project report.
 
+**Private source repository:** [github.com/AwaisBasheer/CloudScale](https://github.com/AwaisBasheer/CloudScale). Access is intended for the course instructor and assigned TA.
+
 ## Live deployment
 
 **Frontend:** [https://d39xic7jvhqh80.cloudfront.net](https://d39xic7jvhqh80.cloudfront.net)<br>
@@ -115,7 +117,7 @@ The project report is available at [`output/pdf/cloudscale-project-report.pdf`](
 
 ## Course review access
 
-This repository is intended to be private. Add the course instructor and assigned TA as GitHub collaborators before assessment. Collaborator invitations remain pending the correct GitHub handles.
+This repository is private. Instructor and TA collaborator invitations are pending their GitHub handles.
 
 ## Teardown
 

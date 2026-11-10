@@ -276,7 +276,7 @@ rubric_rows = [
     [P("Phases 1-4: network, compute, storage, data", "TableBody"), P("Deployed infrastructure, live frontend/API, two healthy targets, architecture and service rationale.", "TableBody"), P("Authenticated CRUD, upload, load/failure evidence, and billing screenshot.", "TableBody")],
     [P("Phases 5-7: Lambda, messaging, identity", "TableBody"), P("Lambda active, queues and Cognito deployed; app health reports selected AWS backends.", "TableBody"), P("Real event processing, SNS delivery, and Cognito end-to-end flow.", "TableBody")],
     [P("Phase 8: DNS, monitoring, budget", "TableBody"), P("CloudWatch dashboard/alarms and a monthly budget alert are deployed.", "TableBody"), P("Route 53 custom name and billing evidence.", "TableBody")],
-    [P("Phase 9: version control", "TableBody"), P("README, .gitignore, project source, deployment guide, and component-wise local commits dated Nov 10 only under the reported course-staff accommodation.", "TableBody"), P("Private GitHub publication and evaluator collaborator invitations remain pending.", "TableBody")],
+    [P("Phase 9: version control", "TableBody"), P("README, .gitignore, project source, deployment guide, and private GitHub repository with component-wise commits dated Nov 10 only under the reported course-staff accommodation.", "TableBody"), P("Professor and TA collaborator invitations are pending their GitHub handles.", "TableBody")],
     [P("Phase 10: SageMaker and Bedrock", "TableBody"), P("Bedrock feature is configured; SageMaker infrastructure remains optional in Terraform.", "TableBody"), P("Real Bedrock call and trained/deployed SageMaker model are missing.", "TableBody")],
     [P("AI-DLC and report/demo", "TableBody"), P("AI-DLC log from available audit forward; this report and architecture diagram. User reports the demo video is recorded.", "TableBody"), P("Historical process cannot be reconstructed; video file and live component screenshots are not in this checkout.", "TableBody")],
 ]
@@ -284,8 +284,8 @@ story.append(table(rubric_rows, [1.36 * inch, 2.77 * inch, 2.92 * inch]))
 
 story += [Spacer(1, 8), P("Version control note", "Subsection")]
 story += [P(
-    "The local component-wise commit history uses Nov 10, 2026 author and committer dates under the course-staff accommodation reported by the user. The commits were organized in this submission session. "
-    "The rubric requires a private GitHub repository and an accepted instructor/evaluator collaborator invitation; publication and invitations remain pending."
+    "The component-wise commit history uses Nov 10, 2026 author and committer dates under the course-staff accommodation reported by the user. The commits were organized in this submission session and published to the private GitHub repository at github.com/AwaisBasheer/CloudScale. "
+    "Professor and TA collaborator invitations remain pending their GitHub handles."
 )]
 story += [P("Infrastructure cleanup", "Subsection")]
 story += [P(
