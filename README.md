@@ -19,25 +19,99 @@ At the last check, the frontend and API health endpoint returned HTTP 200. The A
 
 ```mermaid
 flowchart LR
-    User[Student browser] --> CF[CloudFront]
-    CF -->|static frontend| S3Web[Private S3 frontend origin]
-    CF -->|/api requests| ALB[Public Application Load Balancer]
-    subgraph VPC[Custom two-AZ VPC]
-        ALB --> EC2[Private EC2 Auto Scaling group]
-        EC2 --> DDB[(DynamoDB)]
-        EC2 --> S3Media[(S3 media bucket)]
-        EC2 --> Cognito[Cognito User Pool]
-        EC2 --> Bedrock[Bedrock Runtime]
-        EC2 --> SQS[SQS image queue]
-        SQS --> Lambda[Image processing Lambda]
-        Lambda --> S3Media
-        Lambda --> DDB
-        Lambda --> SNS[SNS notifications]
-        Private[Private subnets] --> NAT[NAT Gateway]
+    User(["Student browser"])
+
+    subgraph EDGE["Edge · global"]
+        CF["CloudFront<br/>CDN + security headers"]
+        S3Web[("S3 frontend bucket<br/>private · Origin Access Control")]
     end
+
+    Cognito["Cognito User Pool<br/>sign-up / sign-in · JWTs"]
+
+    subgraph VPC["Custom VPC · us-east-1 · 2 Availability Zones"]
+        subgraph PUB["Public subnets"]
+            ALB["Application Load Balancer<br/>accepts CloudFront only<br/>+ secret origin header"]
+            NAT["NAT Gateway<br/>outbound only"]
+        end
+        subgraph PRIV["Private subnets · no public IPs"]
+            ASG["EC2 Auto Scaling group<br/>FastAPI on :8000<br/>2 to 4 instances · CPU target 60%"]
+        end
+    end
+
+    subgraph DATA["Data and AI"]
+        DDB[("DynamoDB<br/>on-demand · 4 GSIs")]
+        S3Media[("S3 media bucket<br/>versioning + lifecycle")]
+        Bedrock["Bedrock<br/>Nova Micro descriptions"]
+        SM["SageMaker<br/>disabled · local classifier used"]
+    end
+
+    subgraph ASYNC["Async image pipeline"]
+        SQS["SQS image queue"]
+        DLQ["Dead-letter queue<br/>after 4 failed attempts"]
+        Lambda["Lambda<br/>image processor"]
+        SNS["SNS<br/>events + alarm notices"]
+    end
+
+    subgraph OPS["Operations"]
+        CW["CloudWatch<br/>dashboard + alarms"]
+        Budget["AWS Budgets<br/>$30 monthly alert"]
+    end
+
+    User -->|"HTTPS"| CF
+    CF -->|"static files"| S3Web
+    CF -->|"/api/* + secret header"| ALB
+    User -.->|"sign up / sign in"| Cognito
+
+    ALB -->|"health check /api/health"| ASG
+    ASG -.->|"verify JWT"| Cognito
+    ASG -->|"gateway endpoint"| DDB
+    ASG -->|"gateway endpoint"| S3Media
+    ASG -->|"via NAT"| Bedrock
+    ASG -->|"via NAT · publish job"| SQS
+    ASG -->|"via NAT"| SNS
+    ASG -.->|"outbound"| NAT
+    ASG -.->|"optional"| SM
+
+    SQS -->|"event source · batches of 5"| Lambda
+    SQS -.->|"failed 4 times"| DLQ
+    Lambda -->|"thumbnail"| S3Media
+    Lambda -->|"update listing"| DDB
+    Lambda -->|"notify"| SNS
+
+    CW -.-> ASG
+    CW -.-> ALB
+    CW -.-> Lambda
+    CW -.->|"alarms"| SNS
+
+    classDef edge fill:#dbeafe,stroke:#2563eb,color:#111
+    classDef compute fill:#ffedd5,stroke:#ea580c,color:#111
+    classDef data fill:#dcfce7,stroke:#16a34a,color:#111
+    classDef async fill:#f3e8ff,stroke:#9333ea,color:#111
+    classDef security fill:#fee2e2,stroke:#dc2626,color:#111
+    classDef ops fill:#f3f4f6,stroke:#6b7280,color:#111
+    classDef off fill:#f9fafb,stroke:#9ca3af,color:#6b7280,stroke-dasharray: 4 3
+
+    class User,CF,S3Web edge
+    class ALB,NAT,ASG compute
+    class DDB,S3Media,Bedrock data
+    class SQS,DLQ,Lambda,SNS async
+    class Cognito security
+    class CW,Budget ops
+    class SM off
 ```
 
-The ALB accepts origin traffic through the CloudFront managed prefix list. EC2 instances run in private subnets. An S3/DynamoDB gateway endpoint keeps supported service traffic on the AWS network.
+**Legend:** blue = edge, orange = compute and networking, green = data and AI, purple = async pipeline, red = identity, grey = operations. Solid arrows are the main request path. Dotted arrows are auth, monitoring, optional or failure paths.
+
+### How a request flows
+
+1. The browser loads the React app from CloudFront, which serves it from a private S3 bucket.
+2. The user signs up or signs in with Cognito and receives a JWT.
+3. API calls to `/api/*` go through CloudFront to the ALB. The ALB only accepts CloudFront's IP range and requests carrying the secret origin header.
+4. The ALB forwards healthy traffic to FastAPI on EC2 instances in private subnets across two AZs.
+5. FastAPI verifies the Cognito JWT and checks listing ownership. It reads and writes DynamoDB and S3 through gateway endpoints.
+6. For AI descriptions, the API calls Bedrock through the NAT gateway.
+7. When a listing with an image is published, the API sends a job to SQS and an event to SNS. Lambda makes the thumbnail, updates DynamoDB, and publishes a completion event. Jobs that fail 4 times go to the dead-letter queue.
+8. CloudWatch tracks CPU, request latency, healthy targets and Lambda errors, and Auto Scaling adds or removes instances based on CPU.
 
 ## AWS service choices
 
