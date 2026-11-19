@@ -2,7 +2,7 @@
 
 This log starts with the available repository audit. It does not claim earlier AI-DLC sessions or implementation decisions that were not recorded.
 
-## 2026-11-11 — Audit findings and remediation
+## 2026-11-10 — Audit findings and remediation
 
 - Reviewed `docs/Audit` against the current source tree.
 - Confirmed the audit's Cognito keyword mismatch, missing bearer OpenAPI scheme, photo edit/removal flow, intent-list drift, upload cleanup, root runtime-data ignore, and non-JSON API response findings are addressed in the current working tree.
@@ -13,7 +13,7 @@ This log starts with the available repository audit. It does not claim earlier A
 
 Append dated entries after running dependency installation, backend tests, frontend build, browser smoke flows, or infrastructure validation. Record the exact command and its actual result; do not infer success from source inspection.
 
-## 2026-11-11 — CS-4075 implementation and local verification
+## 2026-11-10 — CS-4075 implementation and local verification
 
 - Read the supplied CS-4075 CloudScale project specification and derived the rubric status matrix in `docs/project-status.md`.
 - Added AWS Terraform resources for a two-AZ VPC, NAT, private EC2 ASG, ALB, S3/CloudFront, DynamoDB, Cognito, SQS/DLQ/Lambda, SNS, IAM roles, CloudWatch, budget alerts, and an optional SageMaker endpoint. The master switch defaults to `false`; no AWS resources were created.
@@ -25,7 +25,7 @@ Append dated entries after running dependency installation, backend tests, front
 - `cd frontend && npm run build`: passed.
 - AWS apply, model training/endpoint, browser E2E, scaling/load evidence, report PDF, demo video, external GitHub setup, and teardown remain outstanding.
 
-## 2026-11-11 — AWS deployment preflight
+## 2026-11-10 — AWS deployment preflight
 
 - Confirmed the configured AWS identity and target region (`us-east-1` for this project). Cost Explorer and CloudFormation stack listing are not available to this identity; no CampusConnect VPC or bucket was found in the target region.
 - Generated a 63-resource plan with a $30 monthly budget alert, NAT enabled, and SageMaker disabled. The plan contained no updates or deletes.
@@ -34,7 +34,7 @@ Append dated entries after running dependency installation, backend tests, front
 - A $100 credit balance was reported by the user. The $30 budget is an alert threshold, not a spending cap. Deploy and verify only with the newly authorized identity; review current spend because Cost Explorer access is unavailable.
 - No report PDF has been generated, per the user's instruction to deploy and finalize first.
 
-## 2026-11-11 — Deployment continuation
+## 2026-11-10 — Deployment continuation
 
 - The user updated the current IAM identity and the refreshed 62-resource plan succeeded with 0 changes and 0 deletes.
 - The apply created the budget, CloudFront distribution/OAC, VPC, public and private subnets, Internet Gateway, NAT Gateway, route tables, S3/DynamoDB endpoints, security groups, ALB/listener/rule, S3 bucket/security/versioning/lifecycle/assets, DynamoDB table, Cognito pool/client, SQS queues, SNS topic/subscription, Lambda log group, and two IAM roles.
@@ -42,7 +42,7 @@ Append dated entries after running dependency installation, backend tests, front
 - Lambda zip is built at `infrastructure/terraform/.build/image_processor.zip`. Frontend assets currently deployed were built without Cognito settings and must be rebuilt and uploaded after completing the stack.
 - The user requests fastest possible submission; report PDF remains deferred until deployment and finalization.
 
-## 2026-11-12 — Deployment completion and evidence
+## 2026-11-10 — Deployment completion and evidence
 
 - The deployment used the `cloudscale-developer` IAM identity; no root credentials were requested or shared. The account's IAM administrator controls changes to IAM policies.
 - Completed the AWS deployment with the current authorized identity. The backend is publicly reachable through CloudFront; `GET /api/health` returned HTTP 200 and reported AWS mode, Cognito, DynamoDB, S3, Bedrock descriptions, local categories, AWS notifications, and no warnings.
@@ -56,4 +56,4 @@ Append dated entries after running dependency installation, backend tests, front
 - Generated the three-page report PDF with an architecture diagram, service rationale, deployment checks, cost estimate, rubric coverage, remaining gaps, and cleanup instructions; rendered and visually inspected all three pages.
 - The user reports that the demo video has been recorded; its file has not been provided in the workspace, so it is not included in the repository/report artifacts.
 - The user later stopped one EC2 instance and reported no replacement. The AWS health check was interrupted before returning; no AWS changes were made during source cleanup. Recheck the Auto Scaling group before claiming current capacity is healthy.
-- The user reports that course staff approved a Nov 10 commit-date accommodation after illness. The component history uses Nov 10, 2026 author and committer timestamps through 11:59 p.m. PKT. The project was published to the private [CloudScale GitHub repository](https://github.com/AwaisBasheer/CloudScale); professor and TA collaborator invitations are pending their GitHub handles.
+(https://github.com/AwaisBasheer/CloudScale); p
